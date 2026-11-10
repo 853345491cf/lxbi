@@ -826,11 +826,11 @@
     });
   }
 
-  /* 东方财富（备用数据源） */
+  /* 东方财富（主数据源） */
   function fetchQuoteEastmoney(){
     var sym = SYMBOL, secid = SECID;
     var url = "https://push2.eastmoney.com/api/qt/stock/get?secid=" + secid +
-      "&fields=f43,f44,f45,f46,f47,f48,f50,f58,f59,f60,f168,f169,f170,f171";
+      "&fields=f43,f44,f45,f46,f47,f48,f50,f58,f59,f60,f86,f168,f169,f170,f171";
     return jsonp(url, "cb").then(function(res){
       var d = res && res.data;
       if (!d || d.f43 == null) throw new Error("empty");
@@ -841,9 +841,22 @@
         high: d.f44 / div, low: d.f45 / div,
         volHand: d.f47, amtYuan: d.f48,
         turnover: d.f168 / 100, ratio: d.f50 / 100, amp: d.f171 / 100,
-        chgPct: d.f170 / 100, chgAmt: d.f169 / 100, time: ""
+        chgPct: d.f170 / 100, chgAmt: d.f169 / 100, time: emTimeStr(d.f86)
       };
     });
+  }
+
+  /* 东财 f86 时间戳（秒）转 YYYYMMDDHHMMSS */
+  function emTimeStr(ts){
+    ts = Number(ts);
+    if (!ts) return "";
+    // 兼容毫秒时间戳
+    if (ts > 1e12) ts = Math.floor(ts / 1000);
+    var d = new Date(ts * 1000);
+    if (isNaN(d.getTime())) return "";
+    var p = function(n){ return (n < 10 ? "0" : "") + n; };
+    return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+           p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
   }
 
   /* 通过本地服务器访问时优先走 /api/*，可绕开跨域与 GBK 编码问题 */
@@ -857,13 +870,8 @@
   }
 
   function fetchQuote(){
-    var sym = SYMBOL;
-    if (USE_API){
-      return apiGet("api/quote?symbol=" + sym).catch(function(){
-        return fetchQuoteTencent().catch(function(){ return fetchQuoteEastmoney(); });
-      });
-    }
-    return fetchQuoteTencent().catch(function(){ return fetchQuoteEastmoney(); });
+    // 东方财富为主数据源，腾讯财经备用（行情）
+    return fetchQuoteEastmoney().catch(function(){ return fetchQuoteTencent(); });
   }
 
   function fetchMinuteDirect(){
@@ -888,11 +896,31 @@
   }
 
   function fetchHistory(){
-    var sym = SYMBOL;
-    if (USE_API){
-      return apiGet("api/kline?symbol=" + sym + "&days=120").catch(fetchHistoryDirect);
-    }
-    return fetchHistoryDirect();
+    // 东方财富为主数据源，腾讯财经备用（日K线）
+    return fetchHistoryEastmoney().catch(fetchHistoryDirect);
+  }
+
+  function fetchHistoryEastmoney(){
+    var url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + SECID +
+      "&klt=101&fqt=1&beg=20200101&end=20500101&lmt=120&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57";
+    return fetch(url, { cache: "no-store" }).then(function(r){
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function(res){
+      var k = res && res.data && res.data.klines;
+      if (!k || !k.length) throw new Error("empty");
+      return k.map(function(s){
+        var p = s.split(",");
+        return {
+          date: p[0],
+          open: parseFloat(p[1]),
+          close: parseFloat(p[2]),
+          high: parseFloat(p[3]),
+          low: parseFloat(p[4]),
+          vol: parseFloat(p[5])
+        };
+      });
+    });
   }
 
   function fetchHistoryDirect(){
