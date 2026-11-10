@@ -2372,8 +2372,8 @@
   function schedule(){
     clearTimeout(state.timer);
     var s = marketStatus();
-    var ms = s.live ? 15000 : 120000;
-    $("refreshHint").textContent = s.live ? "15" : "120";
+    var ms = s.live ? 10000 : 120000;
+    $("refreshHint").textContent = s.live ? "10" : "120";
     state.timer = setTimeout(load, ms);
   }
 
