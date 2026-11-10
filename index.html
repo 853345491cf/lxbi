@@ -1939,10 +1939,14 @@
     var price = (q && isFinite(q.price) && q.price > 0) ? q.price
                : (days && days.length ? days[days.length - 1].close : null);
 
-    var ma10 = null;
+    var ma10 = null, ma20 = null;
     if (days && days.length >= 10){
       var s = 0; for (var i = days.length - 10; i < days.length; i++) s += days[i].close;
       ma10 = s / 10;
+    }
+    if (days && days.length >= 20){
+      var s2 = 0; for (var i2 = days.length - 20; i2 < days.length; i2++) s2 += days[i2].close;
+      ma20 = s2 / 20;
     }
     var lo60 = null, hi60 = null;
     if (days && days.length){
@@ -1994,6 +1998,7 @@
     if (lo60 !== null) levels.push({ tag: "60 日低点 · 证伪位", p: lo60 });
     if (hi60 !== null) levels.push({ tag: "60 日高点", p: hi60 });
     if (ma10 !== null) levels.push({ tag: "10 日线", p: ma10 });
+    if (ma20 !== null) levels.push({ tag: "20 日线", p: ma20 });
     $("revLevels").innerHTML = levels.map(function(x){
       return '<div class="ref-lvl"><span class="tag">' + x.tag + '</span><span class="p">' + fmt(x.p, 2) + '</span></div>';
     }).join("");
