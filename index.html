@@ -363,6 +363,21 @@
   .ref-sig:last-child{border-bottom:none}
   .ref-sig .t{font-weight:600;flex:none}
   .ref-sig .d{font-size:11.5px;color:var(--muted);text-align:right}
+  /* ---------- 反转确认 ---------- */
+  .rev-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .rev-cond{border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+  .rev-cond-t{font-size:11px;color:var(--muted);margin-bottom:6px}
+  .rev-cond-v{font-size:13px;font-weight:600;line-height:1.5}
+  .rev-pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:600;margin-right:6px}
+  .rev-pill.ok{background:rgba(25,158,112,.14);color:#199e70}
+  .rev-pill.wait{background:rgba(250,178,25,.14);color:#fab219}
+  .rev-levels{margin-top:14px}
+  .rev-flow{width:100%;border-collapse:collapse;font-size:12px;margin-top:14px}
+  .rev-flow th,.rev-flow td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+  .rev-flow th:first-child,.rev-flow td:first-child{text-align:left}
+  .rev-flow th{color:var(--muted);font-weight:500}
+  .rev-pos{color:#e66767}.rev-neg{color:#2aa876}
+  @media(max-width:640px){.rev-grid{grid-template-columns:1fr}}
   .ref-verdict{font-size:13px;font-weight:600;line-height:1.55;max-width:560px}
   .ref-verdict .dot-mark{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px;flex:none}
   .ref-note{font-size:11px;color:var(--muted);margin-top:12px;line-height:1.6}
@@ -429,6 +444,7 @@
     <a href="#daily">日线量能</a>
     <a href="#kline">日K·KDJ</a>
     <a href="#backtest">信号回测</a>
+    <a href="#reversal">反转确认</a>
   </nav>
 
   <section class="hero" id="overview">
@@ -559,6 +575,22 @@
     </div>
   </section>
 
+  <section class="card" id="reversal" style="margin-top:16px">
+    <div class="chart-head">
+      <div>
+        <h2 class="card-title">反转确认（确认再上车）</h2>
+        <p class="card-sub" style="margin-bottom:0">主力连续 3 日净流入 + 放量站稳 10 日线，同时满足才算反转确认；跌破 60 日低点则证伪</p>
+      </div>
+      <div class="ref-verdict" id="revVerdict"><span class="dot-mark" style="background:var(--muted)"></span>等待数据</div>
+    </div>
+    <div class="rev-grid">
+      <div class="rev-cond"><div class="rev-cond-t">① 主力连续 3 日净流入</div><div class="rev-cond-v" id="revC1">—</div></div>
+      <div class="rev-cond"><div class="rev-cond-t">② 放量站稳 10 日线</div><div class="rev-cond-v" id="revC2">—</div></div>
+    </div>
+    <div class="rev-levels" id="revLevels"></div>
+    <table class="rev-flow" id="revFlow"></table>
+  </section>
+
   <section class="card fallback" id="fallback">
     <h2 class="card-title">手动输入（接口不可用时）</h2>
     <p class="card-sub">如果实时接口被网络拦截，可手动填入收盘数据，页面会按同样的规则判定。</p>
@@ -606,6 +638,7 @@
   var state = {
     quote: null,
     days: [],
+    flow: [],
     minute: null,
     prevClose: null,
     lastGood: null,
@@ -1873,6 +1906,106 @@
     $("refVerdict").innerHTML = '<span class="dot-mark" style="background:' + c + '"></span>' + verdict;
   }
 
+  /* ============ 反转确认（确认再上车） ============ */
+  function fetchFlow(){
+    var url = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?secid=" + SECID +
+      "&klt=101&lmt=10&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63";
+    return fetch(url, { cache: "no-store" }).then(function(r){
+      if (!r.ok) throw new Error("http " + r.status);
+      return r.json();
+    }).then(function(res){
+      var k = res && res.data && res.data.klines;
+      if (!k || !k.length) throw new Error("empty");
+      return k.map(function(s){
+        var p = s.split(",");
+        return { date: p[0], main: parseFloat(p[1]), close: parseFloat(p[11]), pct: parseFloat(p[12]) };
+      });
+    });
+  }
+
+  function fmtYi(yuan){
+    var v = parseFloat(yuan);
+    if (!isFinite(v)) return "—";
+    var abs = Math.abs(v);
+    if (abs >= 1e8) return (v / 1e8).toFixed(2) + " 亿";
+    if (abs >= 1e4) return (v / 1e4).toFixed(0) + " 万";
+    return v.toFixed(0) + " 元";
+  }
+
+  function renderReversal(){
+    var flow = state.flow || [];
+    var days = state.days;
+    var q = state.lastGood;
+    var price = (q && isFinite(q.price) && q.price > 0) ? q.price
+               : (days && days.length ? days[days.length - 1].close : null);
+
+    var ma10 = null;
+    if (days && days.length >= 10){
+      var s = 0; for (var i = days.length - 10; i < days.length; i++) s += days[i].close;
+      ma10 = s / 10;
+    }
+    var lo60 = null, hi60 = null;
+    if (days && days.length){
+      var seg = days.slice(-60);
+      lo60 = Math.min.apply(null, seg.map(function(d){ return d.low; }));
+      hi60 = Math.max.apply(null, seg.map(function(d){ return d.high; }));
+    }
+    var avg5 = prev5Avg(days);
+    var todayVol = (q && isFinite(q.volHand)) ? q.volHand
+                 : (days && days.length ? days[days.length - 1].vol : null);
+    var isVol = avg5 && todayVol ? todayVol >= avg5 * 1.1 : false;
+
+    var consec = 0;
+    for (var j = flow.length - 1; j >= 0; j--){ if (flow[j].main > 0) consec++; else break; }
+    var flowOk = consec >= 3;
+    var aboveMA10 = ma10 !== null && price !== null && price > ma10;
+    var c2Ok = aboveMA10 && isVol;
+    var bothOk = flowOk && c2Ok;
+    var falsified = lo60 !== null && price !== null && price < lo60;
+
+    var vtone = "flat", vtxt = "主力资金数据暂不可用";
+    if (flow.length){
+      if (falsified){ vtone = "down"; vtxt = "已跌破 60 日低点 " + fmt(lo60, 2) + "，仍处下降趋势，观望"; }
+      else if (bothOk){ vtone = "good"; vtxt = "反转确认 · 可上车"; }
+      else if (consec > 0){ vtone = "warn"; vtxt = "未确认 · 主力已连续净流入 " + consec + " 天，继续观察"; }
+      else { vtone = "flat"; vtxt = "未确认 · 主力仍在流出，继续等待"; }
+    }
+    $("revVerdict").innerHTML = '<span class="dot-mark" style="background:' + (REF_TONE[vtone] || "var(--muted)") + '"></span>' + vtxt;
+
+    if (flowOk){
+      $("revC1").innerHTML = '<span class="rev-pill ok">✓ 已满足</span>连续 ' + consec + ' 日净流入';
+    } else if (flow.length){
+      $("revC1").innerHTML = '<span class="rev-pill wait">✕ 未满足</span>连续 ' + consec + ' 日（需 ≥ 3）';
+    } else {
+      $("revC1").textContent = "—";
+    }
+
+    if (ma10 === null || price === null){
+      $("revC2").textContent = "—";
+    } else if (c2Ok){
+      $("revC2").innerHTML = '<span class="rev-pill ok">✓ 已满足</span>现价 ' + fmt(price, 2) + ' 放量站上 10 日线 ' + fmt(ma10, 2);
+    } else if (aboveMA10){
+      $("revC2").innerHTML = '<span class="rev-pill wait">✕ 未满足</span>已站上 10 日线，但量能未放大';
+    } else {
+      $("revC2").innerHTML = '<span class="rev-pill wait">✕ 未满足</span>现价 ' + fmt(price, 2) + ' 仍在 10 日线 ' + fmt(ma10, 2) + ' 下方';
+    }
+
+    var levels = [];
+    if (lo60 !== null) levels.push({ tag: "60 日低点 · 证伪位", p: lo60 });
+    if (hi60 !== null) levels.push({ tag: "60 日高点", p: hi60 });
+    if (ma10 !== null) levels.push({ tag: "10 日线", p: ma10 });
+    $("revLevels").innerHTML = levels.map(function(x){
+      return '<div class="ref-lvl"><span class="tag">' + x.tag + '</span><span class="p">' + fmt(x.p, 2) + '</span></div>';
+    }).join("");
+
+    var rows = flow.slice(-10).map(function(f){
+      var c = f.main >= 0 ? "rev-pos" : "rev-neg";
+      var sign = f.main > 0 ? "+" : "";
+      return '<tr><td>' + f.date + '</td><td class="' + c + '">' + sign + fmtYi(f.main) + '</td><td>' + fmt(f.close, 2) + '</td><td class="' + (f.pct >= 0 ? "rev-pos" : "rev-neg") + '">' + pct(f.pct, 2) + '</td></tr>';
+    }).join("");
+    $("revFlow").innerHTML = '<thead><tr><th>日期</th><th>主力净流入</th><th>收盘</th><th>涨跌</th></tr></thead><tbody>' + rows + '</tbody>';
+  }
+
   /* ============ 切换标的 ============ */
   function updateTitle(name){
     var code = SYMBOL.slice(2);
@@ -1903,6 +2036,11 @@
     $("refSupport").innerHTML = "";
     $("refSignals").innerHTML = "";
     $("refVerdict").innerHTML = '<span class="dot-mark" style="background:var(--muted)"></span>等待数据';
+    $("revVerdict").innerHTML = '<span class="dot-mark" style="background:var(--muted)"></span>等待数据';
+    $("revC1").textContent = "—";
+    $("revC2").textContent = "—";
+    $("revLevels").innerHTML = "";
+    $("revFlow").innerHTML = "";
     renderChart();
     renderKline();
     renderMinute(null, null);
@@ -1915,6 +2053,7 @@
     state.gen++;
     state.quote = null;
     state.days = [];
+    state.flow = [];
     state.minute = null;
     state.prevClose = null;
     state.lastGood = null;
@@ -2142,14 +2281,17 @@
     var pQuote  = fetchQuote().catch(function(e){ return { __err: e }; });
     var pHist   = fetchHistory().catch(function(e){ return null; });
     var pMinute = fetchMinute().catch(function(){ return null; });
+    var pFlow   = fetchFlow().catch(function(){ return null; });
 
-    Promise.all([pQuote, pHist, pMinute]).then(function(res){
+    Promise.all([pQuote, pHist, pMinute, pFlow]).then(function(res){
       if (gen !== state.gen) return;          // 已切换标的，丢弃过期结果
       var q = res[0];
       var hist = res[1];
       var minu = res[2];
+      var flow = res[3];
 
       if (hist && hist.length) state.days = hist;
+      if (flow && flow.length) state.flow = flow;
       if (minu && minu.points && minu.points.length) state.minute = minu;
 
       if (q && !q.__err){
@@ -2165,6 +2307,7 @@
         renderMinute(state.minute, m.prev);
         renderBacktest();
         renderRef();
+        renderReversal();
         setStatus();
         $("fallback").classList.remove("show");
         hideError();
@@ -2180,6 +2323,7 @@
         renderMinute(state.minute, state.prevClose);
         renderBacktest();
         renderRef();
+        renderReversal();
         showError("实时接口暂时不可用，当前显示的是上次成功获取的数据。");
       } else {
         showError("无法获取行情数据。可能原因：网络被拦截、接口临时不可用，或非交易时段。可先使用下方手动输入。");
