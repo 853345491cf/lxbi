@@ -1877,9 +1877,10 @@
     var supCand = dedupe([
       { p: dayLow, tag: "今日低点" },
       { p: ma5, tag: "5 日线" },
-      { p: ma10, tag: "10 日线" }
+      { p: ma10, tag: "10 日线" },
+      { p: ma20, tag: "20 日线" }
     ].filter(function(x){ return isFinite(x.p) && x.p < price * 0.999; }))
-      .sort(function(a, b){ return b.p - a.p; }).slice(0, 3);
+      .sort(function(a, b){ return b.p - a.p; }).slice(0, 4);
 
     function lvlHtml(list){
       if (!list.length) return '<div class="ref-lvl"><span class="tag">—</span></div>';
