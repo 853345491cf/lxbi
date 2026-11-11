@@ -902,7 +902,7 @@
 
   function fetchHistoryEastmoney(){
     var url = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=" + SECID +
-      "&klt=101&fqt=1&beg=20200101&end=20500101&lmt=120&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57";
+      "&klt=101&fqt=1&beg=20200101&end=20500101&lmt=365&fields1=f1,f2,f3&fields2=f51,f52,f53,f54,f55,f56,f57";
     return fetch(url, { cache: "no-store" }).then(function(r){
       if (!r.ok) throw new Error("http " + r.status);
       return r.json();
@@ -925,7 +925,7 @@
 
   function fetchHistoryDirect(){
     var sym = SYMBOL;
-    var url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + sym + ",day,,,120,qfq";
+    var url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + sym + ",day,,,365,qfq";
     return fetch(url, { cache: "no-store" }).then(function(r){
       if (!r.ok) throw new Error("http " + r.status);
       return r.json();
@@ -1753,7 +1753,7 @@
 
   function renderBacktest(){
     var box = $("btBody");
-    var days = state.days;
+    var days = state.days ? state.days.slice(-365) : null;
     if (!days || days.length < 20){
       box.innerHTML = '<p class="bt-note">历史数据不足，无法回测。</p>';
       return;
