@@ -2034,7 +2034,7 @@
       return '<div class="ref-lvl"><span class="tag">' + x.tag + '</span><span class="p">' + fmt(x.p, 2) + '</span></div>';
     }).join("");
 
-    var rows = flow.slice(-10).map(function(f){
+    var rows = flow.slice(-10).reverse().map(function(f){
       var c = f.main >= 0 ? "rev-pos" : "rev-neg";
       var sign = f.main > 0 ? "+" : "";
       return '<tr><td>' + f.date + '</td><td class="' + c + '">' + sign + fmtYi(f.main) + '</td><td>' + fmt(f.close, 2) + '</td><td class="' + (f.pct >= 0 ? "rev-pos" : "rev-neg") + '">' + pct(f.pct, 2) + '</td></tr>';
