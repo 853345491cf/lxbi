@@ -579,7 +579,7 @@
     <div class="chart-head">
       <div>
         <h2 class="card-title">反转确认（确认再上车）</h2>
-        <p class="card-sub" style="margin-bottom:0">主力连续 3 日净流入 + 放量站稳 10 日线，同时满足才算反转确认；跌破 20 日线则证伪</p>
+        <p class="card-sub" style="margin-bottom:0">主力连续 3 日净流入 + 放量站稳 10 日线，同时满足才算反转确认；跌破 20 日低点则证伪</p>
       </div>
       <div class="ref-verdict" id="revVerdict"><span class="dot-mark" style="background:var(--muted)"></span>等待数据</div>
     </div>
@@ -1976,11 +1976,13 @@
       var s2 = 0; for (var i2 = days.length - 20; i2 < days.length; i2++) s2 += days[i2].close;
       ma20 = s2 / 20;
     }
-    var lo60 = null, hi60 = null;
+    var lo60 = null, hi60 = null, lo20 = null;
     if (days && days.length){
       var seg = days.slice(-60);
       lo60 = Math.min.apply(null, seg.map(function(d){ return d.low; }));
       hi60 = Math.max.apply(null, seg.map(function(d){ return d.high; }));
+      var seg20 = days.slice(-20);
+      lo20 = Math.min.apply(null, seg20.map(function(d){ return d.low; }));
     }
     var avg5 = prev5Avg(days);
     var todayVol = (q && isFinite(q.volHand)) ? q.volHand
@@ -1993,11 +1995,11 @@
     var aboveMA10 = ma10 !== null && price !== null && price > ma10;
     var c2Ok = aboveMA10 && isVol;
     var bothOk = flowOk && c2Ok;
-    var falsified = ma20 !== null && price !== null && price < ma20;
+    var falsified = lo20 !== null && price !== null && price < lo20;
 
     var vtone = "flat", vtxt = "主力资金数据暂不可用";
     if (flow.length){
-      if (falsified){ vtone = "down"; vtxt = "已跌破 20 日线 " + fmt(ma20, 2) + "，仍处下降趋势，观望"; }
+      if (falsified){ vtone = "down"; vtxt = "已跌破 20 日低点 " + fmt(lo20, 2) + "，仍处下降趋势，观望"; }
       else if (bothOk){ vtone = "good"; vtxt = "反转确认 · 可上车"; }
       else if (consec > 0){ vtone = "warn"; vtxt = "未确认 · 主力已连续净流入 " + consec + " 天，继续观察"; }
       else { vtone = "flat"; vtxt = "未确认 · 主力仍在流出，继续等待"; }
@@ -2026,7 +2028,8 @@
     if (lo60 !== null) levels.push({ tag: "60 日低点", p: lo60 });
     if (hi60 !== null) levels.push({ tag: "60 日高点", p: hi60 });
     if (ma10 !== null) levels.push({ tag: "10 日线", p: ma10 });
-    if (ma20 !== null) levels.push({ tag: "20 日线 · 证伪位", p: ma20 });
+    if (ma20 !== null) levels.push({ tag: "20 日线", p: ma20 });
+    if (lo20 !== null) levels.push({ tag: "20 日低点 · 证伪位", p: lo20 });
     $("revLevels").innerHTML = levels.map(function(x){
       return '<div class="ref-lvl"><span class="tag">' + x.tag + '</span><span class="p">' + fmt(x.p, 2) + '</span></div>';
     }).join("");
